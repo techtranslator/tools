@@ -1,0 +1,744 @@
+/ebookhub-theme/
+├── style.css
+├── index.php
+├── header.php
+├── footer.php
+├── functions.php
+├── screenshot.png
+├── assets/
+│   ├── css/
+│   │   ├── style.css
+│   │   └── responsive.css
+│   ├── js/
+│   │   ├── main.js
+│   │   └── ebook-functions.js
+│   └── images/
+├── template-parts/
+│   ├── content/
+│   │   ├── content-ebook.php
+│   │   ├── content-author.php
+│   │   └── content-blog.php
+│   ├── widgets/
+│   │   ├── featured-ebooks.php
+│   │   └── categories-list.php
+│   └── ads/
+│       ├── ad-header.php
+│       └── ad-sidebar.php
+├── inc/
+│   ├── class-ebook-post-type.php
+│   ├── class-ebook-taxonomy.php
+│   ├── customizer.php
+│   └── enqueue.php
+├── page-templates/
+│   ├── template-ebooks.php
+│   ├── template-authors.php
+│   └── template-blog.php
+└── woocommerce/
+    ├── single-product/
+    └── archive-product/
+    /*
+Theme Name: eBookHub
+Theme URI: https://ebookhub.com
+Author: Your Name
+Author URI: https://yourwebsite.com
+Description: A modern eBook website theme with SEO and monetization features.
+Version: 1.0
+License: GNU General Public License v2 or later
+License URI: http://www.gnu.org/licenses/gpl-2.0.html
+Text Domain: ebookhub
+*/
+
+/* Base Styles */
+:root {
+  --primary-color: #3498db;
+  --secondary-color: #2c3e50;
+  --accent-color: #e74c3c;
+  --light-color: #ecf0f1;
+  --dark-color: #2c3e50;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  line-height: 1.6;
+  color: #333;
+}
+
+/* Header Styles */
+.header {
+  background-color: var(--secondary-color);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+/* eBook Card Styles */
+.ebook-card {
+  transition: transform 0.3s ease;
+  border: none;
+  box-shadow: 0 2px 15px rgba(0,0,0,0.1);
+}
+
+.ebook-card:hover {
+  transform: translateY(-5px);
+}
+
+.ebook-card img {
+  height: 250px;
+  object-fit: cover;
+}
+
+/* Responsive Styles */
+@media (max-width: 768px) {
+  .ebook-card {
+    margin-bottom: 20px;
+  }
+  
+  .hero-section {
+    padding: 60px 0;
+  }
+}
+<?php
+/**
+ * eBookHub Theme Functions
+ */
+
+if (!defined('ABSPATH')) {
+    exit; // Exit if accessed directly
+}
+
+// Theme Setup
+function ebookhub_setup() {
+    add_theme_support('title-tag');
+    add_theme_support('post-thumbnails');
+    add_theme_support('html5', array(
+        'search-form',
+        'comment-form',
+        'comment-list',
+        'gallery',
+        'caption',
+    ));
+    
+    // Register menus
+    register_nav_menus(array(
+        'primary' => __('Primary Menu', 'ebookhub'),
+        'footer' => __('Footer Menu', 'ebookhub')
+    ));
+    
+    // Image sizes
+    add_image_size('ebook-cover', 300, 450, true);
+    add_image_size('ebook-thumbnail', 150, 225, true);
+}
+add_action('after_setup_theme', 'ebookhub_setup');
+
+// Enqueue Scripts and Styles
+function ebookhub_scripts() {
+    // CSS
+    wp_enqueue_style('ebookhub-style', get_stylesheet_uri());
+    wp_enqueue_style('bootstrap', 'https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css');
+    wp_enqueue_style('font-awesome', 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css');
+    wp_enqueue_style('ebookhub-custom', get_template_directory_uri() . '/assets/css/style.css');
+    
+    // JS
+    wp_enqueue_script('bootstrap', 'https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js', array(), '5.1.3', true);
+    wp_enqueue_script('ebookhub-main', get_template_directory_uri() . '/assets/js/main.js', array('jquery'), '1.0', true);
+    
+    // Localize script for AJAX
+    wp_localize_script('ebookhub-main', 'ebookhub_vars', array(
+        'ajaxurl' => admin_url('admin-ajax.php'),
+        'nonce' => wp_create_nonce('ebookhub-nonce')
+    );
+}
+add_action('wp_enqueue_scripts', 'ebookhub_scripts');
+
+// Register Custom Post Type for eBooks
+require get_template_directory() . '/inc/class-ebook-post-type.php';
+
+// Register Custom Taxonomies
+require get_template_directory() . '/inc/class-ebook-taxonomy.php';
+
+// Theme Customizer
+require get_template_directory() . '/inc/customizer.php';
+
+// AdSense Integration
+function ebookhub_adsense() {
+    if (!is_admin()) {
+        echo '<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-YOUR_ADSENSE_ID" crossorigin="anonymous"></script>';
+    }
+}
+add_action('wp_head', 'ebookhub_adsense');
+
+// eBook Download Functionality
+function ebookhub_process_download() {
+    check_ajax_referer('ebookhub-nonce', 'nonce');
+    
+    $ebook_id = isset($_POST['ebook_id']) ? intval($_POST['ebook_id']) : 0;
+    $user_id = get_current_user_id();
+    
+    if ($ebook_id) {
+        // Log download
+        global $wpdb;
+        $wpdb->insert(
+            $wpdb->prefix . 'ebook_downloads',
+            array(
+                'ebook_id' => $ebook_id,
+                'user_id' => $user_id,
+                'download_date' => current_time('mysql'),
+                'ip_address' => $_SERVER['REMOTE_ADDR']
+            )
+        );
+        
+        // Get download link
+        $download_link = get_post_meta($ebook_id, 'ebook_download_link', true);
+        
+        wp_send_json_success(array('download_url' => $download_link));
+    }
+    
+    wp_send_json_error();
+}
+add_action('wp_ajax_ebookhub_download', 'ebookhub_process_download');
+add_action('wp_ajax_nopriv_ebookhub_download', 'ebookhub_process_download');
+<!DOCTYPE html>
+<html <?php language_attributes(); ?>>
+<head>
+    <meta charset="<?php bloginfo('charset'); ?>">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    
+    <?php // SEO Meta Tags
+    if (is_single() || is_page()) {
+        $seo_title = get_post_meta(get_the_ID(), '_seo_title', true) ?: get_the_title();
+        $seo_description = get_post_meta(get_the_ID(), '_seo_description', true) ?: wp_trim_words(get_the_content(), 30);
+    ?>
+    <title><?php echo esc_html($seo_title); ?> | <?php bloginfo('name'); ?></title>
+    <meta name="description" content="<?php echo esc_attr($seo_description); ?>">
+    <meta property="og:title" content="<?php echo esc_attr($seo_title); ?>">
+    <meta property="og:description" content="<?php echo esc_attr($seo_description); ?>">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="<?php the_permalink(); ?>">
+    <?php if (has_post_thumbnail()) { ?>
+    <meta property="og:image" content="<?php echo esc_url(get_the_post_thumbnail_url(null, 'large')); ?>">
+    <?php } ?>
+    <?php } else { ?>
+    <title><?php bloginfo('name'); ?> | <?php bloginfo('description'); ?></title>
+    <meta name="description" content="<?php bloginfo('description'); ?>">
+    <?php } ?>
+    
+    <?php // Structured Data for Homepage
+    if (is_front_page()) { ?>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "<?php bloginfo('name'); ?>",
+      "url": "<?php echo esc_url(home_url()); ?>",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "<?php echo esc_url(home_url('/search?s={search_term_string}')); ?>",
+        "query-input": "required name=search_term_string"
+      }
+    }
+    </script>
+    <?php } ?>
+    
+    <?php wp_head(); ?>
+</head>
+<body <?php body_class(); ?>>
+    <?php wp_body_open(); ?>
+    
+    <!-- Header Ad -->
+    <?php get_template_part('template-parts/ads/ad-header'); ?>
+    
+    <header class="header sticky-top">
+        <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+            <div class="container">
+                <a class="navbar-brand" href="<?php echo esc_url(home_url()); ?>">
+                    <?php bloginfo('name'); ?>
+                </a>
+                
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#main-menu">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                
+                <div class="collapse navbar-collapse" id="main-menu">
+                    <?php
+                    wp_nav_menu(array(
+                        'theme_location' => 'primary',
+                        'container' => false,
+                        'menu_class' => 'navbar-nav me-auto',
+                        'fallback_cb' => '__return_false',
+                        'items_wrap' => '<ul id="%1$s" class="%2$s">%3$s</ul>',
+                        'depth' => 2,
+                        'walker' => new bootstrap_5_wp_nav_menu_walker()
+                    ));
+                    ?>
+                    
+                    <form class="d-flex" role="search" method="get" action="<?php echo esc_url(home_url('/')); ?>">
+                        <input class="form-control me-2" type="search" placeholder="Search eBooks..." aria-label="Search" name="s">
+                        <button class="btn btn-outline-light" type="submit">Search</button>
+                    </form>
+                    
+                    <div class="ms-3">
+                        <?php if (is_user_logged_in()) { ?>
+                            <a href="<?php echo esc_url(wp_logout_url()); ?>" class="btn btn-outline-light me-2">Logout</a>
+                            <a href="<?php echo esc_url(get_permalink(get_option('woocommerce_myaccount_page_id'))); ?>" class="btn btn-primary">Account</a>
+                        <?php } else { ?>
+                            <a href="<?php echo esc_url(wp_login_url()); ?>" class="btn btn-outline-light me-2">Login</a>
+                            <a href="<?php echo esc_url(wp_registration_url()); ?>" class="btn btn-primary">Register</a>
+                        <?php } ?>
+                    </div>
+                </div>
+            </div>
+        </nav>
+    </header>
+    
+    <main class="main-content">
+              </main>
+        
+        <footer class="footer py-5 bg-dark text-white">
+            <div class="container">
+                <div class="row">
+                    <div class="col-md-4 mb-4">
+                        <h5><?php bloginfo('name'); ?></h5>
+                        <p class="text-muted">Your digital library for free and premium eBooks in multiple formats.</p>
+                    </div>
+                    
+                    <div class="col-md-2 mb-4">
+                        <h5>Quick Links</h5>
+                        <?php
+                        wp_nav_menu(array(
+                            'theme_location' => 'footer',
+                            'container' => false,
+                            'menu_class' => 'list-unstyled',
+                            'depth' => 1
+                        ));
+                        ?>
+                    </div>
+                    
+                    <div class="col-md-2 mb-4">
+                        <h5>Legal</h5>
+                        <ul class="list-unstyled">
+                            <li><a href="<?php echo esc_url(home_url('/terms')); ?>">Terms</a></li>
+                            <li><a href="<?php echo esc_url(home_url('/privacy')); ?>">Privacy</a></li>
+                            <li><a href="<?php echo esc_url(home_url('/refund-policy')); ?>">Refund Policy</a></li>
+                        </ul>
+                    </div>
+                    
+                    <div class="col-md-4 mb-4">
+                        <h5>Connect With Us</h5>
+                        <div class="social-icons">
+                            <a href="#" class="text-white me-2"><i class="fab fa-facebook-f"></i></a>
+                            <a href="#" class="text-white me-2"><i class="fab fa-twitter"></i></a>
+                            <a href="#" class="text-white me-2"><i class="fab fa-instagram"></i></a>
+                            <a href="#" class="text-white me-2"><i class="fab fa-pinterest"></i></a>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <h6>Newsletter</h6>
+                            <form class="row g-2">
+                                <div class="col-8">
+                                    <input type="email" class="form-control form-control-sm" placeholder="Your email">
+                                </div>
+                                <div class="col-4">
+                                    <button type="submit" class="btn btn-primary btn-sm w-100">Subscribe</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                
+                <hr class="my-4 bg-secondary">
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <p class="mb-0 text-muted">&copy; <?php echo date('Y'); ?> <?php bloginfo('name'); ?>. All rights reserved.</p>
+                    </div>
+                    <div class="col-md-6 text-md-end">
+                        <p class="mb-0 text-muted">Made with <i class="fas fa-heart text-danger"></i> for book lovers</p>
+                    </div>
+                </div>
+            </div>
+        </footer>
+        
+        <?php // Google Analytics
+        if (!current_user_can('manage_options')) { ?>
+        <script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'GA_MEASUREMENT_ID');
+        </script>
+        <?php } ?>
+        
+        <?php wp_footer(); ?>
+    </body>
+</html><article id="ebook-<?php the_ID(); ?>" <?php post_class('ebook-single py-5'); ?>>
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-4">
+                <div class="ebook-cover mb-4">
+                    <?php if (has_post_thumbnail()) : ?>
+                        <?php the_post_thumbnail('ebook-cover', array('class' => 'img-fluid rounded shadow')); ?>
+                    <?php else : ?>
+                        <img src="<?php echo esc_url(get_template_directory_uri() . '/assets/images/ebook-placeholder.jpg'); ?>" class="img-fluid rounded shadow" alt="eBook Cover">
+                    <?php endif; ?>
+                </div>
+                
+                <div class="ebook-actions">
+                    <?php 
+                    $price = get_post_meta(get_the_ID(), 'ebook_price', true);
+                    $download_link = get_post_meta(get_the_ID(), 'ebook_download_link', true);
+                    $is_free = ($price == 0 || empty($price));
+                    ?>
+                    
+                    <?php if ($is_free && $download_link) : ?>
+                        <button class="btn btn-primary btn-lg w-100 mb-3 ebook-download" data-ebook-id="<?php the_ID(); ?>">
+                            <i class="fas fa-download me-2"></i> Download Free
+                        </button>
+                    <?php elseif (function_exists('wc_get_product')) : ?>
+                        <?php
+                        $product_id = get_post_meta(get_the_ID(), 'linked_product_id', true);
+                        if ($product_id) {
+                            echo do_shortcode('[add_to_cart id="' . $product_id . '" show_price="true" style="border:none; padding:0;"]');
+                        }
+                        ?>
+                    <?php endif; ?>
+                    
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <h6 class="card-title">eBook Details</h6>
+                            <ul class="list-unstyled ebook-meta">
+                                <li><strong>Author:</strong> <?php echo esc_html(get_post_meta(get_the_ID(), 'ebook_author', true)); ?></li>
+                                <li><strong>Format:</strong> <?php echo esc_html(get_post_meta(get_the_ID(), 'ebook_format', true)); ?></li>
+                                <li><strong>Pages:</strong> <?php echo esc_html(get_post_meta(get_the_ID(), 'ebook_pages', true)); ?></li>
+                                <li><strong>Language:</strong> <?php echo esc_html(get_post_meta(get_the_ID(), 'ebook_language', true)); ?></li>
+                                <li><strong>Publisher:</strong> <?php echo esc_html(get_post_meta(get_the_ID(), 'ebook_publisher', true)); ?></li>
+                                <li><strong>Published:</strong> <?php echo esc_html(get_post_meta(get_the_ID(), 'ebook_publish_date', true)); ?></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-8">
+                <header class="ebook-header mb-4">
+                    <h1 class="ebook-title"><?php the_title(); ?></h1>
+                    
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="rating me-3">
+                            <?php echo do_shortcode('[star_rating id="' . get_the_ID() . '"]'); ?>
+                        </div>
+                        <span class="text-muted"><?php echo get_comments_number(); ?> reviews</span>
+                    </div>
+                </header>
+                
+                <div class="ebook-content">
+                    <?php the_content(); ?>
+                </div>
+                
+                <!-- In-content Ad -->
+                <?php get_template_part('template-parts/ads/ad-incontent'); ?>
+                
+                <!-- eBook TOC -->
+                <?php if ($toc = get_post_meta(get_the_ID(), 'ebook_toc', true)) : ?>
+                <div class="ebook-toc mt-4">
+                    <h3>Table of Contents</h3>
+                    <div class="toc-content">
+                        <?php echo wpautop($toc); ?>
+                    </div>
+                </div>
+                <?php endif; ?>
+                
+                <!-- Related eBooks -->
+                <div class="related-ebooks mt-5">
+                    <h3 class="mb-4">You May Also Like</h3>
+                    <div class="row">
+                        <?php
+                        $categories = wp_get_post_terms(get_the_ID(), 'ebook_category', array('fields' => 'ids'));
+                        $args = array(
+                            'post_type' => 'ebook',
+                            'posts_per_page' => 3,
+                            'post__not_in' => array(get_the_ID()),
+                            'tax_query' => array(
+                                array(
+                                    'taxonomy' => 'ebook_category',
+                                    'field' => 'term_id',
+                                    'terms' => $categories
+                                )
+                            )
+                        );
+                        $related = new WP_Query($args);
+                        
+                        if ($related->have_posts()) :
+                            while ($related->have_posts()) : $related->the_post();
+                                get_template_part('template-parts/content/content', 'ebook-card');
+                            endwhile;
+                            wp_reset_postdata();
+                        endif;
+                        ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</article>
+jQuery(document).ready(function($) {
+    // eBook Download Handler
+    $('.ebook-download').on('click', function(e) {
+        e.preventDefault();
+        
+        var button = $(this);
+        var ebookId = button.data('ebook-id');
+        
+        button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-2"></i> Processing...');
+        
+        $.ajax({
+            url: ebookhub_vars.ajaxurl,
+            type: 'POST',
+            data: {
+                action: 'ebookhub_download',
+                ebook_id: ebookId,
+                nonce: ebookhub_vars.nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    // Redirect to download
+                    window.location.href = response.data.download_url;
+                } else {
+                    alert('Error downloading eBook. Please try again.');
+                    button.prop('disabled', false).html('<i class="fas fa-download me-2"></i> Download Free');
+                }
+            },
+            error: function() {
+                alert('Connection error. Please try again.');
+                button.prop('disabled', false).html('<i class="fas fa-download me-2"></i> Download Free');
+            }
+        });
+    });
+    
+    // Rating System
+    $('.star-rating .star').on('click', function() {
+        var rating = $(this).data('rating');
+        var postId = $(this).closest('.star-rating').data('post-id');
+        
+        $.ajax({
+            url: ebookhub_vars.ajaxurl,
+            type: 'POST',
+            data: {
+                action: 'ebookhub_rate',
+                post_id: postId,
+                rating: rating,
+                nonce: ebookhub_vars.nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    $('.star-rating[data-post-id="' + postId + '"] .star').removeClass('active');
+                    $('.star-rating[data-post-id="' + postId + '"] .star').each(function() {
+                        if ($(this).data('rating') <= rating) {
+                            $(this).addClass('active');
+                        }
+                    });
+                } else {
+                    alert(response.data.message);
+                }
+            }
+        });
+    });
+    
+    // Mobile Menu Toggle
+    $('.navbar-toggler').on('click', function() {
+        $(this).toggleClass('active');
+    });
+});
+                          <?php
+/**
+ * eBook Custom Post Type
+ */
+
+class eBookHub_Post_Type {
+    
+    public function __construct() {
+        add_action('init', array($this, 'register_post_type'));
+        add_action('add_meta_boxes', array($this, 'add_meta_boxes'));
+        add_action('save_post', array($this, 'save_meta_boxes'));
+        add_filter('manage_ebook_posts_columns', array($this, 'add_custom_columns'));
+        add_action('manage_ebook_posts_custom_column', array($this, 'render_custom_columns'), 10, 2);
+    }
+    
+    public function register_post_type() {
+        $labels = array(
+            'name' => __('eBooks', 'ebookhub'),
+            'singular_name' => __('eBook', 'ebookhub'),
+            'menu_name' => __('eBooks', 'ebookhub'),
+            'name_admin_bar' => __('eBook', 'ebookhub'),
+            'add_new' => __('Add New', 'ebookhub'),
+            'add_new_item' => __('Add New eBook', 'ebookhub'),
+            'new_item' => __('New eBook', 'ebookhub'),
+            'edit_item' => __('Edit eBook', 'ebookhub'),
+            'view_item' => __('View eBook', 'ebookhub'),
+            'all_items' => __('All eBooks', 'ebookhub'),
+            'search_items' => __('Search eBooks', 'ebookhub'),
+            'not_found' => __('No eBooks found.', 'ebookhub'),
+            'not_found_in_trash' => __('No eBooks found in Trash.', 'ebookhub')
+        );
+        
+        $args = array(
+            'labels' => $labels,
+            'public' => true,
+            'publicly_queryable' => true,
+            'show_ui' => true,
+            'show_in_menu' => true,
+            'query_var' => true,
+            'rewrite' => array('slug' => 'ebooks'),
+            'capability_type' => 'post',
+            'has_archive' => true,
+            'hierarchical' => false,
+            'menu_position' => 5,
+            'menu_icon' => 'dashicons-book',
+            'supports' => array('title', 'editor', 'thumbnail', 'excerpt', 'comments'),
+            'show_in_rest' => true,
+        );
+        
+        register_post_type('ebook', $args);
+    }
+    
+    public function add_meta_boxes() {
+        add_meta_box(
+            'ebook_metadata',
+            __('eBook Details', 'ebookhub'),
+            array($this, 'render_ebook_meta_box'),
+            'ebook',
+            'normal',
+            'high'
+        );
+    }
+    
+    public function render_ebook_meta_box($post) {
+        wp_nonce_field('ebook_meta_box', 'ebook_meta_box_nonce');
+        
+        $meta_fields = array(
+            'ebook_author' => __('Author', 'ebookhub'),
+            'ebook_price' => __('Price', 'ebookhub'),
+            'ebook_format' => __('Format', 'ebookhub'),
+            'ebook_pages' => __('Pages', 'ebookhub'),
+            'ebook_language' => __('Language', 'ebookhub'),
+            'ebook_publisher' => __('Publisher', 'ebookhub'),
+            'ebook_publish_date' => __('Publish Date', 'ebookhub'),
+            'ebook_isbn' => __('ISBN', 'ebookhub'),
+            'ebook_download_link' => __('Download Link', 'ebookhub'),
+            'linked_product_id' => __('Linked WooCommerce Product ID', 'ebookhub'),
+            'ebook_toc' => __('Table of Contents', 'ebookhub')
+        );
+        
+        echo '<table class="form-table">';
+        
+        foreach ($meta_fields as $field => $label) {
+            $value = get_post_meta($post->ID, $field, true);
+            
+            echo '<tr>';
+            echo '<th><label for="' . esc_attr($field) . '">' . esc_html($label) . '</label></th>';
+            echo '<td>';
+            
+            if ($field === 'ebook_toc') {
+                wp_editor($value, $field, array(
+                    'textarea_name' => $field,
+                    'textarea_rows' => 10,
+                    'media_buttons' => false,
+                    'teeny' => true
+                ));
+            } else {
+                echo '<input type="text" id="' . esc_attr($field) . '" name="' . esc_attr($field) . '" value="' . esc_attr($value) . '" class="regular-text">';
+            }
+            
+            echo '</td>';
+            echo '</tr>';
+        }
+        
+        echo '</table>';
+    }
+    
+    public function save_meta_boxes($post_id) {
+        if (!isset($_POST['ebook_meta_box_nonce']) || !wp_verify_nonce($_POST['ebook_meta_box_nonce'], 'ebook_meta_box')) {
+            return;
+        }
+        
+        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+            return;
+        }
+        
+        if (!current_user_can('edit_post', $post_id)) {
+            return;
+        }
+        
+        $meta_fields = array(
+            'ebook_author',
+            'ebook_price',
+            'ebook_format',
+            'ebook_pages',
+            'ebook_language',
+            'ebook_publisher',
+            'ebook_publish_date',
+            'ebook_isbn',
+            'ebook_download_link',
+            'linked_product_id',
+            'ebook_toc'
+        );
+        
+        foreach ($meta_fields as $field) {
+            if (isset($_POST[$field])) {
+                update_post_meta($post_id, $field, sanitize_text_field($_POST[$field]));
+            }
+        }
+    }
+    
+    public function add_custom_columns($columns) {
+        return array(
+            'cb' => $columns['cb'],
+            'title' => __('Title', 'ebookhub'),
+            'author' => __('Author', 'ebookhub'),
+            'price' => __('Price', 'ebookhub'),
+            'format' => __('Format', 'ebookhub'),
+            'categories' => __('Categories', 'ebookhub'),
+            'date' => __('Date', 'ebookhub')
+        );
+    }
+    
+    public function render_custom_columns($column, $post_id) {
+        switch ($column) {
+            case 'author':
+                echo get_post_meta($post_id, 'ebook_author', true);
+                break;
+            case 'price':
+                $price = get_post_meta($post_id, 'ebook_price', true);
+                echo $price ? '$' . number_format($price, 2) : 'Free';
+                break;
+            case 'format':
+                echo get_post_meta($post_id, 'ebook_format', true);
+                break;
+            case 'categories':
+                $terms = get_the_terms($post_id, 'ebook_category');
+                if ($terms) {
+                    $term_links = array();
+                    foreach ($terms as $term) {
+                        $term_links[] = '<a href="' . esc_url(get_term_link($term)) . '">' . esc_html($term->name) . '</a>';
+                    }
+                    echo implode(', ', $term_links);
+                }
+                break;
+        }
+    }
+}
+
+new eBookHub_Post_Type();
+                          <div class="header-ad text-center py-2 bg-light">
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-YOUR_ADSENSE_ID"
+     crossorigin="anonymous"></script>
+    <!-- Header Ad -->
+    <ins class="adsbygoogle"
+         style="display:block"
+         data-ad-client="ca-pub-YOUR_ADSENSE_ID"
+         data-ad-slot="YOUR_HEADER_SLOT"
+         data-ad-format="auto"
+         data-full-width-responsive="true"></ins>
+    <script>
+         (adsbygoogle = window.adsbygoogle || []).push({});
+    </script>
+</div>
